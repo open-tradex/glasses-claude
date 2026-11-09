@@ -26,7 +26,7 @@ struct Brain {
             case .http(let code, let body):
                 switch code {
                 case 401: return "Токен шлюза не подходит (401). Вставь его заново в настройках."
-                case 0: return "Сервер недоступен. Проверь, что на iPhone включён Tailscale."
+                case 0: return "Сервер недоступен. Проверь, что на iPhone включён Tailscale. (\(body))"
                 default: return "Ошибка шлюза \(code): \(body.prefix(200))"
                 }
             case .empty:
@@ -85,10 +85,16 @@ struct Brain {
 
     // MARK: HTTP
 
+    static let defaultURL = "http://100.108.41.39:8650"
+    static let legacyURLs = ["https://hermes-vps.tailc26bde.ts.net:8443"]
+
     private func request(_ path: String, method: String, timeout: TimeInterval) throws -> URLRequest {
         guard !token.isEmpty else { throw ClientError.noToken }
         let base = baseURL.trimmingCharacters(in: CharacterSet(charactersIn: "/ "))
-        guard let url = URL(string: base + path) else { throw ClientError.http(0, "плохой адрес") }
+        // Имя *.ts.net с включённым Funnel в публичном DNS ведёт на Funnel, где порта 8443 нет,
+        // а без MagicDNS iPhone видит именно его. Поэтому ходим прямо на IP шлюза в tailnet.
+        let fixed = Brain.legacyURLs.contains(base) ? Brain.defaultURL : base
+        guard let url = URL(string: fixed + path) else { throw ClientError.http(0, "плохой адрес") }
         var r = URLRequest(url: url)
         r.httpMethod = method
         r.timeoutInterval = timeout

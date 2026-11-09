@@ -10,7 +10,7 @@ struct SettingsView: View {
         NavigationStack {
             Form {
                 Section {
-                    TextField("https://…:8443", text: $settings.gatewayURL)
+                    TextField("http://100.x.x.x:8650", text: $settings.gatewayURL)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                         .keyboardType(.URL)

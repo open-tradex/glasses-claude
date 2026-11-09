@@ -79,6 +79,12 @@
 	<array>
 		<string>_bonjour._tcp</string>
 	</array>
+	<!-- Шлюз ходит по HTTP на IP в tailnet (трафик шифрует WireGuard) -->
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoads</key>
+		<true/>
+	</dict>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Нужно, чтобы слышать тебя через микрофоны очков.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>

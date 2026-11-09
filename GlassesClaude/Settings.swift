@@ -18,7 +18,7 @@ enum ImageMode: String, CaseIterable, Identifiable {
 @MainActor
 final class AppSettings: ObservableObject {
     static let shared = AppSettings()
-    static let defaultGateway = "https://hermes-vps.tailc26bde.ts.net:8443"
+    static let defaultGateway = Brain.defaultURL
 
     /// Адрес шлюза glasses-gw (доступен только внутри Tailscale).
     @Published var gatewayURL: String {

@@ -184,7 +184,7 @@ final class VoiceEngine: NSObject, ObservableObject {
         stopTask()
         liveTranscript = ""
         if !text.isEmpty { onUtterance?(text) }
-        // Если ответ не начался (фраза без «Клод»), продолжаем слушать
+        // Если ответ не начался (фраза без активатора), продолжаем слушать
         if isListening && !isSpeaking { startListening() }
     }
 

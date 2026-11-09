@@ -10,31 +10,28 @@ struct SettingsView: View {
         NavigationStack {
             Form {
                 Section {
-                    SecureField("sk-ant-…", text: $settings.apiKey)
+                    TextField("https://…:8443", text: $settings.gatewayURL)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .keyboardType(.URL)
+                    SecureField("Токен", text: $settings.gatewayToken)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                 } header: {
-                    Text("Ключ Claude API")
+                    Text("Шлюз Hermes")
                 } footer: {
-                    Text("platform.claude.com → API Keys. Хранится только на этом iPhone, в Keychain.")
-                }
-
-                Section("Модель") {
-                    Picker("Модель", selection: $settings.model) {
-                        ForEach(ClaudeModel.allCases) { Text($0.title).tag($0) }
-                    }
-                    .pickerStyle(.inline)
-                    .labelsHidden()
+                    Text("Работает только при включённом Tailscale на iPhone. Токен хранится в Keychain.")
                 }
 
                 Section {
-                    Toggle("Отвечать только на «Клод, …»", isOn: $settings.requireWakeWord)
+                    Toggle("Отвечать только на «Джипити, …»", isOn: $settings.requireWakeWord)
                 } header: {
                     Text("Голос")
                 } footer: {
-                    Text(settings.requireWakeWord
-                         ? "Отвечаю только на фразы со словом «Клод». Тап по сфере — отправить следующую фразу без него."
+                    Text((settings.requireWakeWord
+                         ? "Отвечаю только на фразы со словом «Джипити». Тап по сфере — отправить следующую фразу без него."
                          : "Отвечаю на любую фразу после паузы. Удобно в тишине, но могу реагировать на чужую речь.")
+                         + "\n«Гермес, …» — поручение агенту Hermes, «Иберика, …» — боту Иберики. Ответ придёт голосом и в Telegram.")
                 }
 
                 Section {
@@ -47,14 +44,19 @@ struct SettingsView: View {
                     Text("Если выключить микрофоны очков, слушаю через iPhone, а голос ответа в очках звучит чище. После изменения перезапусти голос.")
                 }
 
-                if GlassesManager.cameraEnabled {
-                    Section("Кадр с камеры очков") {
+                Section {
+                    Toggle("Камера очков", isOn: $settings.cameraOn)
+                    if settings.cameraOn {
                         Picker("Кадр", selection: $settings.imageMode) {
                             ForEach(ImageMode.allCases) { Text($0.title).tag($0) }
                         }
                         .pickerStyle(.inline)
                         .labelsHidden()
                     }
+                } header: {
+                    Text("Кадр с камеры очков")
+                } footer: {
+                    Text("После изменения перезапусти голос.")
                 }
 
                 Section {

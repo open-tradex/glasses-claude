@@ -108,7 +108,7 @@ struct ContentView: View {
                 .frame(width: 30, height: 30)
                 .overlay(Circle().strokeBorder(Color.white.opacity(0.6), lineWidth: 1.5))
 
-                Text("Claude")
+                Text("Гермес")
                     .font(.system(size: 17, weight: .semibold))
 
                 HStack(spacing: 5) {
@@ -210,7 +210,7 @@ struct ContentView: View {
             .accessibilityLabel(assistant.isRunning ? "Остановить голос" : "Говорить через очки")
 
             HStack(spacing: 6) {
-                TextField("", text: $draft, prompt: Text("Напиши Клоду…").foregroundColor(Theme.inkTertiary))
+                TextField("", text: $draft, prompt: Text("Напиши… («Гермес, …» — поручение)").foregroundColor(Theme.inkTertiary))
                     .font(.system(size: 16))
                     .foregroundStyle(Theme.ink)
                     .tint(Theme.ink)
@@ -321,7 +321,7 @@ struct ContentView: View {
             if !voice.liveTranscript.isEmpty { return "«\(voice.liveTranscript)»" }
             if let hint = assistant.hint { return hint }
             return settings.requireWakeWord
-                ? "Начни фразу с «Клод…» или нажми на сферу"
+                ? "Начни фразу с «Джипити…» или нажми на сферу"
                 : "Говори — отвечу, когда сделаешь паузу"
         case .thinking:
             return assistant.lastQuestion
@@ -336,7 +336,7 @@ struct ContentView: View {
         switch assistant.status {
         case .off, .error: return "Начать голосовой разговор"
         case .speaking: return "Прервать ответ"
-        case .listening: return "Отправить следующую фразу без слова «Клод»"
+        case .listening: return "Отправить следующую фразу без слова «Джипити»"
         default: return ""
         }
     }

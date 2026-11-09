@@ -1,7 +1,7 @@
 import Foundation
 import UIKit
 
-/// Связывает всё вместе: фраза или текст → Claude → ответ (голосом в очки, если идёт голосовая сессия).
+/// Связывает всё вместе: фраза или текст → GPT (быстро) или агент Hermes/Иберика → ответ голосом в очки.
 @MainActor
 final class Assistant: ObservableObject {
     enum Status: Equatable {
@@ -12,14 +12,16 @@ final class Assistant: ObservableObject {
     @Published private(set) var status: Status = .off
     /// Идёт голосовая сессия с очками (микрофон слушает).
     @Published private(set) var isRunning = false
-    /// Claude сейчас готовит ответ — новые вопросы пока не принимаем.
+    /// Сейчас готовится быстрый ответ — новые вопросы пока не принимаем.
     @Published private(set) var isBusy = false
     @Published private(set) var lastQuestion = ""
     @Published private(set) var lastAnswer = ""
     /// Короткая подсказка на главном экране (исчезает сама).
     @Published private(set) var hint: String?
-    /// Следующая фраза будет принята без «Клод» (тап по сфере).
+    /// Следующая фраза будет принята без слова-активатора (тап по сфере).
     @Published var forceNextUtterance = false
+    /// Сколько поручений агентам сейчас в работе.
+    @Published private(set) var agentJobs = 0
 
     let glasses = GlassesManager()
     let voice = VoiceEngine()
@@ -31,8 +33,13 @@ final class Assistant: ObservableObject {
     private let visualCues = ["посмотри", "смотри", "что это", "что я вижу", "видишь", "что передо мной",
                               "опиши", "прочитай", "прочти", "переведи", "сфоткай", "сними", "кадр",
                               "какой шрифт", "какой цвет", "какого цвета", "что за", "палитр", "референс"]
-    /// Как распознаватель слышит «Клод» — ловим все частые варианты.
-    private let wakeWords = ["клод", "клот", "клоуд", "клауд", "глод", "claude", "cloud"]
+    /// Как распознаватель слышит «Джипити».
+    private let wakeWords = ["джипити", "джи пи ти", "gpt", "жпт", "гпт", "chatgpt", "чат джипити"]
+    /// Первое слово фразы → агент. Распознаватель коверкает имена, ловим частые варианты.
+    private let agentWords: [(String, Brain.Agent)] = [
+        ("гермес", .hermes), ("гермиз", .hermes), ("гермис", .hermes), ("hermes", .hermes), ("эрмес", .hermes),
+        ("иберик", .iberika), ("иберия", .iberika), ("иберии", .iberika), ("iberik", .iberika), ("ибирик", .iberika),
+    ]
 
     /// После такой паузы разговор начинается заново, в новой теме.
     private let topicIdleInterval: TimeInterval = 30 * 60
@@ -47,10 +54,16 @@ final class Assistant: ObservableObject {
     func start() async {
         guard !isRunning, status != .starting else { return }
         status = .starting
+        GlassesManager.cameraEnabled = settings.cameraOn
         do {
             guard await voice.requestPermissions() else { throw AssistantError.permissions }
             if GlassesManager.cameraEnabled {
-                try await glasses.ensureCameraPermission()
+                do {
+                    try await glasses.ensureCameraPermission()
+                } catch {
+                    GlassesManager.cameraEnabled = false
+                    showHint("Камера очков недоступна — работаю только голосом")
+                }
             }
             // Порядок важен: сессия с очками → микрофон (HFP) → поток камеры
             try await glasses.prepareSession()
@@ -80,7 +93,7 @@ final class Assistant: ObservableObject {
         forceNextUtterance = false
     }
 
-    /// Тап по сфере во время прослушивания: следующая фраза уйдёт без «Клод».
+    /// Тап по сфере во время прослушивания: следующая фраза уйдёт без слова-активатора.
     func listenWithoutWakeWord() {
         guard isRunning else { return }
         forceNextUtterance = true
@@ -93,47 +106,71 @@ final class Assistant: ObservableObject {
 
     // MARK: Входящие фразы и текст
 
+    /// «Гермес, сделай …» → (.hermes, «сделай …»). Имя агента должно стоять первым словом.
+    private func agentRoute(_ text: String) -> (Brain.Agent, String)? {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let first = trimmed.split(whereSeparator: { !$0.isLetter }).first.map { $0.lowercased() } ?? ""
+        guard let agent = agentWords.first(where: { first.hasPrefix($0.0) })?.1,
+              let range = trimmed.range(of: first, options: [.caseInsensitive]) else { return nil }
+        let rest = String(trimmed[range.upperBound...])
+            .trimmingCharacters(in: CharacterSet(charactersIn: " ,.!?—-:"))
+        return (agent, rest)
+    }
+
+    private func wantsImage(_ text: String) -> Bool {
+        guard GlassesManager.cameraEnabled else { return false }
+        switch settings.imageMode {
+        case .always: return true
+        case .never: return false
+        case .auto:
+            let lower = text.lowercased()
+            return visualCues.contains { lower.contains($0) }
+        }
+    }
+
     private func handle(utterance raw: String) {
-        guard !isBusy else { return }
         var question = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard question.count >= 2 else { return }
 
+        // Поручение агенту: имя агента само по себе активатор
+        if let (agent, task) = agentRoute(question) {
+            forceNextUtterance = false
+            guard !task.isEmpty else { return showHint("Скажи задачу сразу после «\(agent.title)»") }
+            delegate(task, to: agent, source: .voice, withImage: wantsImage(task))
+            return
+        }
+
+        guard !isBusy else { return }
         if settings.requireWakeWord && !forceNextUtterance {
             let found = wakeWords.compactMap {
                 question.range(of: $0, options: [.caseInsensitive, .diacriticInsensitive])
             }.first
             guard let range = found else {
-                showHint("Не услышал «Клод» — пропустил: «\(question)»")
+                showHint("Не услышал «Джипити» — пропустил: «\(question)»")
                 return
             }
-            // Отрезаем «Клод» вместе с окончанием («Клоду», «Клода») и запятой
             question = String(question[range.upperBound...].drop(while: { $0.isLetter }))
                 .trimmingCharacters(in: CharacterSet(charactersIn: " ,.!?—-"))
             if question.isEmpty { question = "Привет!" }
         }
         forceNextUtterance = false
-
-        var needsImage: Bool
-        switch settings.imageMode {
-        case .always: needsImage = true
-        case .never: needsImage = false
-        case .auto:
-            let lower = question.lowercased()
-            needsImage = visualCues.contains { lower.contains($0) }
-        }
-        if !GlassesManager.cameraEnabled { needsImage = false }
-
-        submit(question, source: .voice, withImage: needsImage)
+        submit(question, source: .voice, withImage: wantsImage(question))
     }
 
     /// Текстовое сообщение из приложения. Возвращает id темы, куда оно ушло.
     @discardableResult
     func sendText(_ text: String, inTopic topicId: UUID? = nil) -> UUID? {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty, !isBusy else { return nil }
+        guard !trimmed.isEmpty else { return nil }
         if let topicId { library.currentTopicId = topicId }
+        if let (agent, task) = agentRoute(trimmed), !task.isEmpty {
+            return delegate(task, to: agent, source: .text, withImage: false)
+        }
+        guard !isBusy else { return nil }
         return submit(trimmed, source: .text, withImage: false)
     }
+
+    // MARK: Быстрый ответ GPT
 
     @discardableResult
     private func submit(_ question: String, source: ChatMessage.Source, withImage: Bool) -> UUID {
@@ -147,33 +184,25 @@ final class Assistant: ObservableObject {
         return topicId
     }
 
-    private func request(_ question: String, topicId: UUID, history: [ClaudeClient.Turn],
+    private func request(_ question: String, topicId: UUID, history: [Brain.Turn],
                          source: ChatMessage.Source, withImage: Bool) async {
         let image = withImage ? await glasses.snapshot() : nil
         let prompt = (withImage && image == nil)
             ? "\(question)\n[Системная пометка: камера очков сейчас недоступна, изображения нет.]"
             : question
-        let client = ClaudeClient(apiKey: settings.apiKey, model: settings.model.rawValue)
+        let client = settings.brain
 
         do {
             let answer = try await client.send(history: history, userText: prompt, image: image)
             library.append(ChatMessage(role: .assistant, text: answer, source: source), to: topicId)
             lastAnswer = answer
             nameTopicIfNeeded(topicId, question: question, answer: answer, client: client)
-            if isRunning {
-                status = .speaking
-                voice.speak(answer, rate: settings.speechRate)
-                await waitUntilSpoken()
-            }
+            await say(answer)
         } catch {
             let message = error.localizedDescription
             library.append(ChatMessage(role: .assistant, text: message, source: source, isError: true), to: topicId)
             lastAnswer = message
-            if isRunning {
-                status = .speaking
-                voice.speak("Не получилось получить ответ. Подробности в приложении.", rate: settings.speechRate)
-                await waitUntilSpoken()
-            }
+            await say("Не получилось получить ответ. Подробности в приложении.")
         }
 
         isBusy = false
@@ -181,8 +210,51 @@ final class Assistant: ObservableObject {
         status = isRunning ? .listening : .off
     }
 
-    /// После первого ответа в теме просим Claude придумать ей короткое название.
-    private func nameTopicIfNeeded(_ topicId: UUID, question: String, answer: String, client: ClaudeClient) {
+    // MARK: Поручения агентам
+
+    /// Поручение уходит в фон: сразу «принял», результат озвучиваем, когда придёт. Можно говорить дальше.
+    @discardableResult
+    private func delegate(_ task: String, to agent: Brain.Agent, source: ChatMessage.Source, withImage: Bool) -> UUID {
+        lastQuestion = "\(agent.title): \(task)"
+        library.splitIfIdle(after: topicIdleInterval)
+        let topicId = library.appendToCurrent(ChatMessage(role: .user, text: "\(agent.title), \(task)", source: source))
+        agentJobs += 1
+        Task {
+            let client = settings.brain
+            let image = withImage ? await glasses.snapshot() : nil
+            do {
+                let (id, ack) = try await client.startAgent(agent, text: task, image: image)
+                await say(ack)
+                let reply = try await client.waitAgent(id: id)
+                library.append(ChatMessage(role: .assistant, text: "\(agent.title): \(reply)", source: source), to: topicId)
+                lastAnswer = reply
+                await say("\(agent.title) ответил. \(reply)")
+            } catch {
+                let message = error.localizedDescription
+                library.append(ChatMessage(role: .assistant, text: message, source: source, isError: true), to: topicId)
+                lastAnswer = message
+                await say("\(agent.title) недоступен. Подробности в приложении.")
+            }
+            agentJobs -= 1
+        }
+        return topicId
+    }
+
+    // MARK: Озвучка
+
+    /// Говорит в очки, если идёт голосовая сессия. Ждёт, пока закончится предыдущая фраза.
+    private func say(_ text: String) async {
+        guard isRunning else { return }
+        await waitUntilSpoken()
+        let before = status
+        status = .speaking
+        voice.speak(text, rate: settings.speechRate)
+        await waitUntilSpoken()
+        if status == .speaking { status = (before == .thinking && isBusy) ? .thinking : (isRunning ? .listening : .off) }
+    }
+
+    /// После первого ответа в теме просим модель придумать ей короткое название.
+    private func nameTopicIfNeeded(_ topicId: UUID, question: String, answer: String, client: Brain) {
         guard let topic = library.topic(topicId), !topic.titleIsManual,
               topic.messages.filter({ !$0.isError }).count == 2 else { return }
         Task {
@@ -213,6 +285,6 @@ enum AssistantError: LocalizedError {
     case permissions
 
     var errorDescription: String? {
-        "Дай доступ к микрофону и распознаванию речи: Настройки iOS → Клод в очках."
+        "Дай доступ к микрофону и распознаванию речи: Настройки iOS → Гермес в очках."
     }
 }

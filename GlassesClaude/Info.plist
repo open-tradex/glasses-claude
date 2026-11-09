@@ -5,7 +5,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>ru</string>
 	<key>CFBundleDisplayName</key>
-	<string>Клод в очках</string>
+	<string>Гермес в очках</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -82,7 +82,7 @@
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Нужно, чтобы слышать тебя через микрофоны очков.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>Нужно, чтобы превращать твою речь в текст для Claude.</string>
+	<string>Нужно, чтобы превращать твою речь в текст для ассистента.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Нужно только для тестов без очков (камера телефона вместо очков).</string>
 </dict>

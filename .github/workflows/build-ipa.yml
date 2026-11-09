@@ -1,0 +1,57 @@
+name: Build unsigned IPA (AltStore)
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-26
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Xcode
+        run: |
+          ls /Applications | grep -i xcode
+          XC=$(ls -d /Applications/Xcode_26*.app | sort -V | tail -1)
+          sudo xcode-select -s "$XC"
+          xcodebuild -version
+
+      - name: Generate project
+        run: |
+          brew install xcodegen
+          xcodegen generate
+
+      - name: Build
+        run: |
+          set -o pipefail
+          xcodebuild -project GlassesClaude.xcodeproj -scheme GlassesClaude \
+            -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            build | tail -60
+
+      - name: Package IPA
+        run: |
+          APP=$(find build/Build/Products/Release-iphoneos -maxdepth 1 -name "*.app" | head -1)
+          mkdir -p Payload && cp -R "$APP" Payload/
+          zip -qry HermesGlasses.ipa Payload
+          ls -la HermesGlasses.ipa
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: HermesGlasses-ipa
+          path: HermesGlasses.ipa
+
+      - name: Release
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG=build-${{ github.run_number }}
+          gh release create "$TAG" HermesGlasses.ipa --title "Hermes Glasses $TAG" --notes "Unsigned IPA. Install via AltStore." --latest

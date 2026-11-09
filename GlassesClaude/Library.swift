@@ -89,9 +89,9 @@ final class LibraryStore: ObservableObject {
     }
 
     /// История текущей темы в формате API: роли чередуются, начинается с user, заканчивается assistant.
-    func apiHistory(limit: Int = 20) -> [ClaudeClient.Turn] {
+    func apiHistory(limit: Int = 20) -> [Brain.Turn] {
         guard let topic = currentTopic else { return [] }
-        var merged: [ClaudeClient.Turn] = []
+        var merged: [Brain.Turn] = []
         for message in topic.messages where !message.isError {
             let role = message.role.rawValue
             if let last = merged.last, last.role == role {
@@ -136,7 +136,7 @@ final class LibraryStore: ObservableObject {
         return topic.id
     }
 
-    /// Добавляет сообщение в конкретную тему (например, ответ Claude). Если тему удалили — ничего не делает.
+    /// Добавляет сообщение в конкретную тему (например, ответ модели). Если тему удалили — ничего не делает.
     func append(_ message: ChatMessage, to topicId: UUID) {
         guard let index = topics.firstIndex(where: { $0.id == topicId }) else { return }
         topics[index].messages.append(message)
@@ -152,7 +152,7 @@ final class LibraryStore: ObservableObject {
         save()
     }
 
-    /// Название, которое придумал Claude. Не перезаписывает название, данное вручную.
+    /// Название, которое придумала модель. Не перезаписывает название, данное вручную.
     func setAutoTitle(_ id: UUID, _ title: String) {
         let clean = title
             .trimmingCharacters(in: .whitespacesAndNewlines)

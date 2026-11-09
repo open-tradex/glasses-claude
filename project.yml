@@ -1,6 +1,6 @@
 name: GlassesClaude
 options:
-  bundleIdPrefix: com.marksimonov
+  bundleIdPrefix: com.kanichev
   deploymentTarget:
     iOS: "17.2"
   createIntermediateGroups: true
@@ -18,7 +18,7 @@ targets:
       - path: GlassesClaude
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.marksimonov.glassesclaude
+        PRODUCT_BUNDLE_IDENTIFIER: com.kanichev.hermesglasses
         PRODUCT_NAME: GlassesClaude
         INFOPLIST_FILE: GlassesClaude/Info.plist
         GENERATE_INFOPLIST_FILE: NO

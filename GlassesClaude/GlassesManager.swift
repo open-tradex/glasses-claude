@@ -36,7 +36,7 @@ final class GlassesManager: ObservableObject {
     private var latestFrame: UIImage?
     private var pendingPhoto: CheckedContinuation<UIImage?, Never>?
     /// Камера очков. Временно выключена — поставь true, чтобы вернуть.
-    static let cameraEnabled = false
+    static var cameraEnabled = true
 
     private var lastPreviewUpdate = Date.distantPast
     private var streamRetries = 0
@@ -223,8 +223,12 @@ final class GlassesManager: ObservableObject {
 
         // 504×896 при 7 к/с: меньше сжатия по Bluetooth, картинка чище
         let config = StreamConfiguration(videoCodec: .raw, resolution: .medium, frameRate: 7)
-        guard let camera = try session.addCamera(config: config) else {
-            throw GlassesError.cameraUnavailable
+        // Камера не поднялась (права, прошивка) — не роняем сессию, работаем голосом
+        guard let camera = try? session.addCamera(config: config) else {
+            print("[Glasses] camera unavailable, voice only")
+            Self.cameraEnabled = false
+            phase = .streaming
+            return
         }
         self.camera = camera
         phase = .waitingForStream
@@ -352,7 +356,7 @@ enum GlassesError: LocalizedError {
         switch self {
         case .notConnected(let info): return "Очки найдены, но не на связи. Открой Meta AI (не закрывай его), дождись подключения и нажми «Начать» снова.\n\(info)"
         case .updateGlasses: return "Нужно обновить прошивку очков: Meta AI → очки → настройки → обновление."
-        case .updateSDK: return "Очкам нужна более новая версия SDK — напиши Claude, обновим."
+        case .updateSDK: return "Очкам нужна более новая версия SDK — обнови приложение."
         case .sessionFailed(let reason): return "Очки не запустили сессию: \(reason)"
         case .noDevice: return "Очки не видны приложению. Открой Meta AI и проверь, что очки подключены, надеты и дужки открыты."
         case .sessionStopped: return "Сессия с очками остановилась. Проверь, что очки надеты и дужки открыты."

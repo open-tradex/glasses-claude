@@ -554,6 +554,6 @@ struct TypingBubble: View {
             .glass(radius: 20)
             Spacer()
         }
-        .accessibilityLabel("Claude печатает")
+        .accessibilityLabel("Печатает")
     }
 }

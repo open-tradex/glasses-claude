@@ -14,33 +14,27 @@ enum ImageMode: String, CaseIterable, Identifiable {
     }
 }
 
-enum ClaudeModel: String, CaseIterable, Identifiable {
-    case sonnet = "claude-sonnet-5-5"
-    case haiku = "claude-haiku-5-5"
-    var id: String { rawValue }
-    var title: String {
-        switch self {
-        case .sonnet: return "Sonnet 5.5 — умнее"
-        case .haiku: return "Haiku 5.5 — быстрее и дешевле"
-        }
-    }
-}
-
-/// Настройки приложения. Ключ API хранится в Keychain, остальное — в UserDefaults.
+/// Настройки приложения. Токен шлюза хранится в Keychain, остальное — в UserDefaults.
 @MainActor
 final class AppSettings: ObservableObject {
     static let shared = AppSettings()
+    static let defaultGateway = "https://hermes-vps.tailc26bde.ts.net:8443"
 
-    @Published var apiKey: String {
-        didSet { Keychain.save(apiKey, for: "anthropic_api_key") }
+    /// Адрес шлюза glasses-gw (доступен только внутри Tailscale).
+    @Published var gatewayURL: String {
+        didSet { UserDefaults.standard.set(gatewayURL, forKey: "gatewayURL") }
     }
-    @Published var model: ClaudeModel {
-        didSet { UserDefaults.standard.set(model.rawValue, forKey: "model") }
+    @Published var gatewayToken: String {
+        didSet { Keychain.save(gatewayToken, for: "gateway_token") }
     }
     @Published var imageMode: ImageMode {
         didSet { UserDefaults.standard.set(imageMode.rawValue, forKey: "imageMode") }
     }
-    /// Отвечать только на фразы с «Клод …». По умолчанию выключено — отвечает на любую фразу.
+    /// Камера очков. Если поток не поднимется, голос всё равно работает.
+    @Published var cameraOn: Bool {
+        didSet { UserDefaults.standard.set(cameraOn, forKey: "cameraOn") }
+    }
+    /// Отвечать только на фразы с «Джипити …». По умолчанию выключено — отвечает на любую фразу.
     @Published var requireWakeWord: Bool {
         didSet { UserDefaults.standard.set(requireWakeWord, forKey: "requireWakeWord.v2") }
     }
@@ -53,11 +47,14 @@ final class AppSettings: ObservableObject {
         didSet { UserDefaults.standard.set(speechRate, forKey: "speechRate") }
     }
 
+    var brain: Brain { Brain(baseURL: gatewayURL, token: gatewayToken) }
+
     private init() {
         let d = UserDefaults.standard
-        apiKey = Keychain.load("anthropic_api_key") ?? ""
-        model = ClaudeModel(rawValue: d.string(forKey: "model") ?? "") ?? .sonnet
+        gatewayURL = d.string(forKey: "gatewayURL") ?? AppSettings.defaultGateway
+        gatewayToken = Keychain.load("gateway_token") ?? ""
         imageMode = ImageMode(rawValue: d.string(forKey: "imageMode") ?? "") ?? .auto
+        cameraOn = d.object(forKey: "cameraOn") as? Bool ?? true
         requireWakeWord = d.object(forKey: "requireWakeWord.v2") as? Bool ?? false
         speechRate = d.object(forKey: "speechRate") as? Double ?? 0.52
         useGlassesMic = d.object(forKey: "useGlassesMic") as? Bool ?? true

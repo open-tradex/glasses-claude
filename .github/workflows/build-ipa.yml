@@ -13,7 +13,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        runner: [macos-latest, macos-15-intel, macos-26]
+        runner: [macos-15-intel]
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 60
     steps:
@@ -58,5 +58,5 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           TAG=build-${{ github.run_number }}-${{ matrix.runner }}
-          gh release view "build-${{ github.run_number }}-macos-latest" >/dev/null 2>&1 && exit 0
+          
           gh release create "$TAG" HermesGlasses.ipa --title "Hermes Glasses $TAG" --notes "Unsigned IPA. Install via AltStore." --latest

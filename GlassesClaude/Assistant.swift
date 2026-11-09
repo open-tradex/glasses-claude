@@ -285,6 +285,6 @@ enum AssistantError: LocalizedError {
     case permissions
 
     var errorDescription: String? {
-        "Дай доступ к микрофону и распознаванию речи: Настройки iOS → Гермес в очках."
+        "Дай доступ к микрофону и распознаванию речи: Настройки iOS → Hermes Glasses."
     }
 }
